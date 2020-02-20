@@ -1,0 +1,145 @@
+set mapreduce.job.enqueuename = root.ai_queue;
+select log_date, pagetype, style
+from ai.recsys_pegasus_joined
+where log_date >= 20170602
+and log_date <= 20170603
+and client = 1
+and r_type = 1
+group by log_date
+limit 10;
+
+
+
+hive --hiveconf mapreduce.job.enqueuename = root.ai_queue -e"
+select time, r_id, r_type, r_pos
+from (
+select time, r_id, r_type, r_pos
+from ai.recsys_pegasus_joined
+where log_date >= 20170601
+and log_date <= 20170602
+and s_id ='综合推荐'
+)a
+left join
+(
+select id, state, access
+from ods.ods_archive_archive
+)b
+on (a.r_id = cast (b.id as int))
+limit 10;"
+
+ai.recsys_pegasus_joined
+
+
+hive --hiveconf mapreduce.job.enqueuename = root.ai_queue -e"
+select  item_type
+from ai.recsys_user_act
+where log_date = 20170601
+group by log_date,item_type
+limit 10;"
+
+hive --hiveconf mapreduce.job.enqueuename = root.ai_queue -e"
+select item_type, action_id 
+from (
+select item_type, action_id
+from ai.recsys_user_act 
+where log_date = 20170601
+)a 
+left join
+(
+select item_type
+from ai.recsys_user_act
+where log_hour = 1
+)b
+on (a.item_type = b.item_type)
+limit 10;"
+
+
+
+
+
+date = 20170601
+log_type = 'c1'
+hive --hiveconf mapreduce.job.enqueuename = root.ai_queue -e"
+insert overwrite table ai.recsys_pegasus_instance partition(log_date='20170601',log_type='1')
+select (case when b.mid is not NULL then 1 else 0 end)as label,a.mid,a,r_id,a.time, a.r_type, a.r_pos, a.r_source, 
+a.real_feature, a.r_tide, a.av_feature, a.fresh_idx, a.last_detail, a.ctr_score, b.ctime
+from (
+	select mid, r_id, time, r_type, r_pos, r_source, r_tid, av_feature, ctime
+	from ai.recsys_pegasus_joined
+	where log_date = 20170601
+	and r_type = 1
+	and is_rec = 1
+	and mid > 0
+	and click_flag = 1
+)a
+left join
+(
+	select mid,avid,ctime
+	from ai.recsys_user_act_fav
+	where log_date = 20170601
+)b
+on(a.mid = b.mid and b.avid = a.r_id)
+join
+(
+select copyright,mid
+from ods.ods_archive_archive
+where click = 1
+)c
+on (b.mid = c.mid)
+"
+
+
+
+
+
+
+
+
+
+
+
+
+
+date=$1
+
+log_type='click_fav'
+hive --hiveconf mapreduce.job.queuename=root.ai_queue -e "
+insert overwrite table ai.recsys_pegasus_instance partition(log_date='$date', log_type='$log_type')
+select (case when b.mid is not NULL then 1 else 0 end) as label, a.mid, a.r_id, a.time, a.r_type, a.r_pos, a.r_source, a.real_feature, a.r_tid, a.av_feature, a.fresh_idx, a.last_detail, a.ctr_score, b.ctime
+from
+(
+    select mid, r_id, time, r_type, r_pos, r_source, '' as real_feature, r_tid, av_feature, '0' as fresh_idx, '' as last_detail, '' as ctr_score, ctime
+    from ai.recsys_pegasus_joined
+    where log_date = $date
+    and r_type = 1
+    and s_id = '综合推荐'
+    and is_rec = 1
+    and mid > 0
+    and click_flag = 1
+)a
+left join
+(
+    select mid, avid, ctime
+    from ai.recsys_user_act_fav
+    where log_date = $date
+)b
+on (a.mid = b.mid and b.avid = a.r_id)
+
+"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
